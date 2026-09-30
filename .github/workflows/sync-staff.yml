@@ -1,4 +1,4 @@
-name: Sync Staff Sheet
+name: Sync Staff Page
 
 on:
   schedule:
@@ -13,21 +13,69 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download current staff sheet
+      - name: Download staff sheet
         run: |
           curl -L \
           "https://docs.google.com/spreadsheets/d/1ylZbLnMZ7NJqB3Nrx1uJ6nBng9W-n9Ar9zJptEX-M0k/export?format=csv&gid=0" \
           -o staff.csv
 
-      - name: Commit changes
+      - name: Build webpage
+        run: |
+          python3 - <<'PY'
+          import csv
+          import html
+
+          with open("staff.csv", newline="", encoding="utf-8-sig") as f:
+              rows = list(csv.reader(f))
+
+          # Your sheet currently has its column headers on row 2.
+          headers = rows[1]
+          employees = [r for r in rows[2:] if r and r[0].strip()]
+
+          parts = [
+              "<!doctype html>",
+              '<html lang="en">',
+              "<head>",
+              '<meta charset="utf-8">',
+              "<title>Airsoft Texas 10 Staff Information</title>",
+              "</head>",
+              "<body>",
+              "<h1>Airsoft Texas 10 Staff Information</h1>",
+              "<p>This is the current authoritative AI-readable staff information source for Airsoft Texas 10.</p>",
+              "<p>Blank fields mean no standing information is currently specified.</p>"
+          ]
+
+          for row in employees:
+              row += [""] * (len(headers) - len(row))
+
+              parts.append("<hr>")
+              parts.append(f"<h2>{html.escape(row[0])}</h2>")
+              parts.append("<ul>")
+
+              for header, value in zip(headers, row):
+                  if value.strip():
+                      parts.append(
+                          f"<li><strong>{html.escape(header)}:</strong> "
+                          f"{html.escape(value)}</li>"
+                      )
+
+              parts.append("</ul>")
+
+          parts.extend(["</body>", "</html>"])
+
+          with open("index.html", "w", encoding="utf-8") as f:
+              f.write("\n".join(parts))
+          PY
+
+      - name: Commit updated page
         run: |
           git config user.name "Airsoft Texas 10 Sync"
           git config user.email "actions@github.com"
 
-          git add staff.csv
+          git add staff.csv index.html
 
           if git diff --cached --quiet; then
             echo "No changes."
