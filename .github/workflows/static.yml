@@ -1,0 +1,110 @@
+name: Update Staff Page
+
+on:
+  push:
+    branches:
+      - main
+
+  schedule:
+    - cron: "*/30 * * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download staff sheet
+        run: |
+          mkdir -p site
+
+          curl -L --fail \
+            "https://docs.google.com/spreadsheets/d/1ylZbLnMZ7NJqB3Nrx1uJ6nBng9W-n9Ar9zJptEX-M0k/export?format=csv&gid=0" \
+            -o staff.csv
+
+      - name: Build staff webpage
+        run: |
+          python3 - <<'PY'
+          import csv
+          import html
+
+          with open("staff.csv", newline="", encoding="utf-8-sig") as f:
+              rows = list(csv.reader(f))
+
+          if len(rows) < 2:
+              raise RuntimeError("Could not find expected staff data.")
+
+          headers = rows[1]
+
+          employees = [
+              row for row in rows[2:]
+              if row and row[0].strip()
+          ]
+
+          page = [
+              "<!doctype html>",
+              '<html lang="en">',
+              "<head>",
+              '<meta charset="utf-8">',
+              '<meta name="viewport" content="width=device-width, initial-scale=1">',
+              "<title>Airsoft Texas 10 Staff Information</title>",
+              "</head>",
+              "<body>",
+              "<h1>Airsoft Texas 10 Staff Information</h1>",
+              "<p><strong>Authoritative current staff information.</strong></p>",
+              "<p>This page is automatically generated from the Airsoft Texas 10 staff sheet.</p>",
+          ]
+
+          for row in employees:
+              row += [""] * (len(headers) - len(row))
+
+              page.append("<hr>")
+              page.append(f"<h2>{html.escape(row[0])}</h2>")
+              page.append("<ul>")
+
+              for header, value in zip(headers, row):
+                  header = header.strip()
+                  value = value.strip()
+
+                  if header and value:
+                      page.append(
+                          f"<li><strong>{html.escape(header)}:</strong> "
+                          f"{html.escape(value)}</li>"
+                      )
+
+              page.append("</ul>")
+
+          page.extend(["</body>", "</html>"])
+
+          with open("site/index.html", "w", encoding="utf-8") as f:
+              f.write("\n".join(page))
+          PY
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload webpage
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy webpage
+        id: deployment
+        uses: actions/deploy-pages@v4
