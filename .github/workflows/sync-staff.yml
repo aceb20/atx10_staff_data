@@ -1,0 +1,37 @@
+name: Sync Staff Sheet
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download current staff sheet
+        run: |
+          curl -L \
+          "https://docs.google.com/spreadsheets/d/1ylZbLnMZ7NJqB3Nrx1uJ6nBng9W-n9Ar9zJptEX-M0k/export?format=csv&gid=0" \
+          -o staff.csv
+
+      - name: Commit changes
+        run: |
+          git config user.name "Airsoft Texas 10 Sync"
+          git config user.email "actions@github.com"
+
+          git add staff.csv
+
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Update staff information"
+            git push
+          fi
